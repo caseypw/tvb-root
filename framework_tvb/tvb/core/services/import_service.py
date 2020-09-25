@@ -42,6 +42,7 @@ from datetime import datetime
 from cherrypy._cpreqbody import Part
 from sqlalchemy.orm.attributes import manager_of_class
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from tvb.basic.neotraits.ex import TraitTypeError
 from tvb.basic.profile import TvbProfile
 from tvb.basic.logger.builder import get_logger
 from tvb.config import VIEW_MODEL2ADAPTER, TVB_IMPORTER_MODULE, TVB_IMPORTER_CLASS
@@ -271,7 +272,7 @@ class ImportService(object):
             if OPERATION_XML in files:
                 # Previous Operation format for uploading previous versions of projects
                 operation_file_path = os.path.join(root, OPERATION_XML)
-                operation, operation_xml_parameters = self.__build_operation_from_file(project, operation_file_path)
+                operation, operation_xml_parameters, _ = self.build_operation_from_file(project, operation_file_path)
                 operation.import_file = operation_file_path
                 self.logger.debug("Found operation in old XML format: " + str(operation))
                 retrieved_operations.append(Operation2ImportData(operation, root, info_from_xml=operation_xml_parameters))
@@ -328,6 +329,16 @@ class ImportService(object):
 
         return sorted(retrieved_operations, key=lambda op_data: op_data.order_field)
 
+    def create_view_model(self, operation_entity, operation_data, new_op_folder, add_params=None):
+        view_model = self._get_new_form_view_model(operation_entity, operation_data.info_from_xml)
+        if add_params is not None:
+            for key, value in add_params.items():
+                setattr(view_model, key, value)
+        h5.store_view_model(view_model, new_op_folder)
+        operation_entity.view_model_gid = view_model.gid.hex
+        dao.store_entity(operation_entity)
+        return view_model.gid
+
     def import_project_operations(self, project, import_path):
         """
         This method scans provided folder and identify all operations that needs to be imported
@@ -339,17 +350,14 @@ class ImportService(object):
         for operation_data in ordered_operations:
 
             if operation_data.is_old_form:
-                operation_entity, datatype_group = self.__import_operation(operation_data.operation)
+                operation_entity, datatype_group = self.import_operation(operation_data.operation)
                 new_op_folder = self.files_helper.get_project_folder(project, str(operation_entity.id))
 
                 try:
                     operation_datatypes = self._load_datatypes_from_operation_folder(operation_data.operation_folder,
                                                                                  operation_entity, datatype_group)
                     # Create and store view_model from operation
-                    view_model = self._get_new_form_view_model(operation_entity, operation_data.info_from_xml)
-                    h5.store_view_model(view_model, new_op_folder)
-                    operation_entity.view_model_gid = view_model.gid.hex
-                    dao.store_entity(operation_entity)
+                    self.create_view_model(operation_entity, operation_data, new_op_folder)
 
                     self._store_imported_datatypes_in_db(project, operation_datatypes)
                     imported_operations.append(operation_entity)
@@ -410,7 +418,10 @@ class ImportService(object):
                     new_param_name = param[1:]
                 new_param_name = new_param_name.lower()
                 if new_param_name in declarative_attrs:
-                    setattr(view_model, new_param_name, params[param])
+                    try:
+                        setattr(view_model, new_param_name, params[param])
+                    except TraitTypeError:
+                        pass
         return view_model
 
     def _import_image(self, src_folder, metadata_file, project_id, target_images_path):
@@ -513,7 +524,7 @@ class ImportService(object):
                          "project with the same name or gid.") % (project_entity.name, project_entity.gid)
             raise ImportException(error_msg)
 
-    def __build_operation_from_file(self, project, operation_file):
+    def build_operation_from_file(self, project, operation_file):
         """
         Create Operation entity from metadata file.
         """
@@ -522,7 +533,7 @@ class ImportService(object):
         return operation_entity.from_dict(operation_dict, dao, self.user_id, project.gid)
 
     @staticmethod
-    def __import_operation(operation_entity):
+    def import_operation(operation_entity):
         """
         Store a Operation entity.
         """
@@ -561,15 +572,3 @@ class ImportService(object):
             return temp_folder
         except FileStructureException as excep:
             raise ServicesBaseException("Could not process the given ZIP file..." + str(excep))
-
-#     # Sort all h5 files based on their creation date stored in the files themselves
-#     sorted_h5_files = sorted(h5_files, key=lambda h5_path: _get_create_date_for_sorting(h5_path) or datetime.now())
-#     return sorted_h5_files
-#
-#
-# def _get_create_date_for_sorting(h5_file):
-#     storage_manager = HDF5StorageManager(os.path.dirname(h5_file), os.path.basename(h5_file))
-#     root_metadata = storage_manager.get_metadata()
-#     create_date_str = str(root_metadata['Create_date'], 'utf-8')
-#     create_date = datetime.strptime(create_date_str.replace('datetime:', ''), '%Y-%m-%d %H:%M:%S.%f')
-#     return create_date
