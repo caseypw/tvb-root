@@ -249,12 +249,7 @@ class SimulatorPSERangeFragment(ABCAdapterForm):
     def _add_field_for_gid(self, param, param_key):
         # type: (RangeParameter, str) -> None
         traited_attr = Attr(h5.REGISTRY.get_index_for_datatype(param.type), label='Choice for {}'.format(param.name))
-        conditions = None
-        if param.name == 'surface':
-            conditions = FilterChain(fields=[FilterChain.datatype + '.surface_type'], operations=["=="],
-                                     values=[CORTICAL])
-        pse_param_dt = TraitDataTypeSelectField(traited_attr, self, conditions=conditions,
-                                                name=self.GID_FIELD.format(param_key),
+        pse_param_dt = TraitDataTypeSelectField(traited_attr, self, name=self.GID_FIELD.format(param_key),
                                                 dynamic_conditions=param.range_definition, has_all_option=True,
                                                 show_only_all_option=True)
         self.__setattr__(self.GID_FIELD.format(param_key), pse_param_dt)

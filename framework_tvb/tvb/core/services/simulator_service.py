@@ -41,7 +41,7 @@ import numpy
 from tvb.adapters.simulator.monitor_forms import MonitorForm
 from tvb.basic.logger.builder import get_logger
 from tvb.core.entities.file.files_helper import FilesHelper
-from tvb.core.entities.file.simulator.view_model import SimulatorAdapterModel, CortexViewModel
+from tvb.core.entities.file.simulator.view_model import SimulatorAdapterModel
 from tvb.core.entities.model.model_datatype import DataTypeGroup
 from tvb.core.entities.storage import dao
 from tvb.core.neocom import h5
@@ -91,11 +91,6 @@ class SimulatorService(object):
         current_attr = simulator
         for param_name in range_param_name_list[:len(range_param_name_list) - 1]:
             current_attr = getattr(current_attr, param_name)
-        if range_param_name_list[-1] == 'surface':
-            temp = range_parameter_value
-            range_parameter_value = CortexViewModel()
-            range_parameter_value.surface_gid = temp
-            range_parameter_value.region_mapping_data = simulator.surface.region_mapping_data
         setattr(current_attr, range_param_name_list[-1], range_parameter_value)
 
     def async_launch_and_prepare_simulation(self, burst_config, user, project, simulator_algo,
